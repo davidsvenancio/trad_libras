@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRADUTOR DE LIBRAS (PROJETO CRIAR - SENAC/PR)</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f1f1f1;
+        margin: 0;
+        padding: 0;
+    }
+
+    #container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: white; /* Fundo branco */
+        border-left: 5px solid #ccc; /* Borda esquerda cinza */
+        border-right: 5px solid #ccc; /* Borda direita cinza */
+    }
+
+    #header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    #header img {
+        max-width: 150%; /* Alterado o tamanho máximo da logo */
+    }
+
+    h1 {
+        color: #283d8a; /* Azul escuro */
+        text-align: center;
+        text-transform: uppercase; /* Transforma em maiúsculo */
+        margin-top: 20px;
+    }
+
+    h2 {
+        color: #283d8a; /* Azul escuro */
+        text-align: center;
+        text-transform: uppercase; /* Transforma em maiúsculo */
+    }
+
+    #video-container {
+        margin-bottom: 20px;
+        position: sticky;
+        top: 20px; /* Ajuste conforme necessário */
+        z-index: 1; /* Garante que o vídeo fique na parte superior */
+        background-color: white;
+    }
+
+    video {
+        width: 100%;
+        height: auto;
+        border: 1px solid #ccc;
+    }
+
+    #legend-container {
+        background-color: #f8f8f8; /* Cinza claro */
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .legend-item {
+        margin-bottom: 10px;
+    }
+
+    .selected {
+        color: green;
+        font-weight: bold;
+    }
+
+    #button-container {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    #start-button, #stop-button {
+        background-color: #283d8a; /* Azul escuro */
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        margin-right: 10px;
+    }
+
+    #start-button.active {
+        background-color: #2a5aaa; /* Azul púrpura */
+    }
+
+    #start-button:hover, #stop-button:hover {
+        background-color: #2a5aaa; /* Azul púrpura */
+    }
+</style>
+</head>
+<body>
+<div id="container">
+    <div id="header">
+        <img src="senac_logo.png" alt="Logo do Senac">
+    </div>
+    <h1>TRADUTOR DE LIBRAS</h1>
+    <h2>Desenvolvido por David Venancio</h2>
+    <div id="video-container">
+        <video id="video" autoplay muted></video>
+    </div>
+    <div id="legend-container">
+        <h2>Legendas</h2>
+        <div id="legend"></div>
+    </div>
+    <div id="button-container">
+        <button id="start-button">Iniciar</button>
+        <button id="stop-button">Parar</button>
+    </div>
+</div>
+
+<div vw class="enabled">
+    <div vw-access-button class="active"></div>
+    <div vw-plugin-wrapper>
+      <div class="vw-plugin-top-wrapper"></div>
+    </div>
+</div>
+<script src="https://vlibras.gov.br/app/vlibras-plugin.js"></script>
+<script>
+    const video = document.getElementById('video');
+    const legendDiv = document.getElementById('legend');
+    let currentIndex = -1;
+    let recognition;
+
+    async function setupCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error('Erro ao acessar a câmera:', err);
+        }
+    }
+
+    setupCamera();
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognitionStarted = false;
+
+    function startRecognition() {
+        if (!recognitionStarted) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'pt-BR';
+            recognition.continuous = true;
+            recognition.interimResults = false;
+
+            recognition.onresult = event => {
+                const transcript = event.results[event.results.length - 1][0].transcript;
+                addLegend(transcript);
+            };
+
+            recognition.start();
+            recognitionStarted = true;
+        }
+    }
+
+    function stopRecognition() {
+        if (recognition) {
+            recognition.stop();
+            recognitionStarted = false;
+        }
+    }
+
+    function addLegend(text) {
+        const legendItem = document.createElement('div');
+        legendItem.classList.add('legend-item');
+        legendItem.textContent = text;
+        legendDiv.appendChild(legendItem);
+        legendDiv.scrollTop = legendDiv.scrollHeight; // Rolar automaticamente para a última legenda
+    }
+
+    function sendToVLibras(text) {
+        const event = new CustomEvent('VLibrasTranslate', { detail: text });
+        document.dispatchEvent(event);
+    }
+
+    function selectLegend(legendItem) {
+        const legendItems = document.querySelectorAll('.legend-item');
+        legendItems.forEach(item => {
+            item.classList.remove('selected');
+        });
+        legendItem.classList.add('selected');
+        const text = legendItem.textContent;
+        sendToVLibras(text);
+        legendItem.click(); // Simula um clique quando selecionado
+    }
+
+    function selectNextLegend() {
+        const legendItems = document.querySelectorAll('.legend-item');
+        if (currentIndex < legendItems.length - 1) {
+            currentIndex++;
+            const selectedLegend = legendItems[currentIndex];
+            selectLegend(selectedLegend);
+            selectedLegend.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' });
+        }
+    }
+
+    document.addEventListener('keydown', event => {
+        if (event.code === 'Space') {
+            event.preventDefault();
+            selectNextLegend();
+        }
+    });
+
+    legendDiv.addEventListener('click', event => {
+        if (event.target.classList.contains('legend-item')) {
+            currentIndex = Array.from(legendDiv.children).indexOf(event.target);
+            selectLegend(event.target);
+        }
+    });
+
+    const startButton = document.getElementById('start-button');
+    const stopButton = document.getElementById('stop-button');
+
+    startButton.addEventListener('click', () => {
+        startRecognition();
+        startButton.classList.add('active'); // Adiciona a classe 'active' ao iniciar
+        startButton.disabled = true; // Desativa o botão Iniciar
+    });
+
+    stopButton.addEventListener('click', () => {
+        stopRecognition();
+        startButton.classList.remove('active'); // Remove a classe 'active' ao parar
+        startButton.disabled = false; // Ativa o botão Iniciar
+    });
+
+    // Adicionando a classe 'floating' ao vídeo para torná-lo flutuante ao rolar a página
+    window.addEventListener('scroll', () => {
+        const videoContainer = document.getElementById('video-container');
+        const threshold = videoContainer.getBoundingClientRect().top - window.innerHeight;
+        if (threshold <= 0) {
+            video.classList.add('floating');
+        } else {
+            video.classList.remove('floating');
+        }
+    });
+</script>
+<script>
+    new window.VLibras.Widget('https://vlibras.gov.br/app');
+</script>
+</body>
+</html>
